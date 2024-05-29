@@ -167,6 +167,7 @@ async def generate(
     eos_text: str = None,
     keep_prompt: bool = False,
 ):
+    print("PRMPT:LLM_SERVE@@@@@@@@@:\n", prompt)
     start_time = time.time()
 
     model_shortname = os.environ["MODEL_NAME"]
