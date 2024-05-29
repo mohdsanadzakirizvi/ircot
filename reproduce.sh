@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Expected command line argument values.
-valid_systems=("ircot" "ircot_qa" "oner" "oner_qa" "nor_qa")
+valid_systems=("ircot" "ircot_qa" "oner" "oner_qa" "nor_qa" "ircot_debug")
 valid_models=("codex" "flan-t5-xxl" "flan-t5-xl" "flan-t5-large" "flan-t5-base" "none")
 valid_datasets=("hotpotqa" "2wikimultihopqa" "musique" "iirc")
 
