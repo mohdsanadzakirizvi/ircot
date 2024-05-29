@@ -750,6 +750,8 @@ class StepByStepCOTGenParticipant(ParticipantModel):
             print("WARNING: Using StepByStepCOTGenParticipant without any prompt.")
             self.prompt = ""
 
+        print("PROMPT@@@@@@@@@@@\n:", self.prompt)
+        print("QUES_PFX@@@@@@@@@@@\n:", self.question_prefix)
         self.max_para_num_words = max_para_num_words
         if gen_model == "gpt3":
             self.generator = GPT3Generator(**kwargs)
