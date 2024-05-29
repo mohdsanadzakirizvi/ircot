@@ -34,8 +34,8 @@ check_argument "$3" 3 valid_datasets[*]
 
 echo ">>>> Instantiate experiment configs with different HPs and write them in files. <<<<"
 python runner.py $1 $2 $3 write --prompt_set 1
-python runner.py $1 $2 $3 write --prompt_set 2
-python runner.py $1 $2 $3 write --prompt_set 3
+# python runner.py $1 $2 $3 write --prompt_set 2
+# python runner.py $1 $2 $3 write --prompt_set 3
 ## if you make a change to base_configs, the above steps need to be rerun to
 ## regenerate instantiated experiment configs (with HPs populated)
 
@@ -43,8 +43,8 @@ echo ">>>> Run experiments for different HPs on the dev set. <<<<"
 python runner.py $1 $2 $3 predict --prompt_set 1
 ## If prediction files already exist, it won't redo them. Pass --force if you want to redo.
 
-echo ">>>> Run evaluation for different HPs on the dev set. <<<<"
-python runner.py $1 $2 $3 evaluate --prompt_set 1
+# echo ">>>> Run evaluation for different HPs on the dev set. <<<<"
+# python runner.py $1 $2 $3 evaluate --prompt_set 1
 ## This runs by default after prediction. This is mainly to show a standalone option.
 
 echo ">>>> Show results for experiments with different HPs <<<<"
@@ -53,24 +53,24 @@ python runner.py $1 $2 $3 summarize --prompt_set 1
 
 echo ">>>> Pick the best HP and save the config with that HP. <<<<"
 python runner.py $1 $2 $3 write --prompt_set 1 --best
-python runner.py $1 $2 $3 write --prompt_set 2 --best
-python runner.py $1 $2 $3 write --prompt_set 3 --best
+# python runner.py $1 $2 $3 write --prompt_set 2 --best
+# python runner.py $1 $2 $3 write --prompt_set 3 --best
 
-echo ">>>> Run the experiment with best HP on the test set <<<<"
-python runner.py $1 $2 $3 predict --prompt_set 1 --best --eval_test --official
-python runner.py $1 $2 $3 predict --prompt_set 2 --best --eval_test --official
-python runner.py $1 $2 $3 predict --prompt_set 3 --best --eval_test --official
+# echo ">>>> Run the experiment with best HP on the test set <<<<"
+# python runner.py $1 $2 $3 predict --prompt_set 1 --best --eval_test --official
+# python runner.py $1 $2 $3 predict --prompt_set 2 --best --eval_test --official
+# python runner.py $1 $2 $3 predict --prompt_set 3 --best --eval_test --official
 ## If prediction files already exist, it won't redo them. Pass --force if you want to redo.
 
-echo ">>>> Run evaluation for the best HP on the test set <<<<"
-python runner.py $1 $2 $3 evaluate --prompt_set 1 --best --eval_test --official
-python runner.py $1 $2 $3 evaluate --prompt_set 2 --best --eval_test --official
-python runner.py $1 $2 $3 evaluate --prompt_set 3 --best --eval_test --official
+# echo ">>>> Run evaluation for the best HP on the test set <<<<"
+# python runner.py $1 $2 $3 evaluate --prompt_set 1 --best --eval_test --official
+# python runner.py $1 $2 $3 evaluate --prompt_set 2 --best --eval_test --official
+# python runner.py $1 $2 $3 evaluate --prompt_set 3 --best --eval_test --official
 ## This runs by default after prediction. This is mainly to show a standalone option.
 
-echo ">>>> Summarize best test results for individual prompts and aggregate (mean +- std) of them) <<<<"
-python runner.py $1 $2 $3 summarize --prompt_set 1 --best --eval_test --official
-python runner.py $1 $2 $3 summarize --prompt_set 2 --best --eval_test --official
-python runner.py $1 $2 $3 summarize --prompt_set 3 --best --eval_test --official
-python runner.py $1 $2 $3 summarize --prompt_set aggregate --best --eval_test --official
+# echo ">>>> Summarize best test results for individual prompts and aggregate (mean +- std) of them) <<<<"
+# python runner.py $1 $2 $3 summarize --prompt_set 1 --best --eval_test --official
+# python runner.py $1 $2 $3 summarize --prompt_set 2 --best --eval_test --official
+# python runner.py $1 $2 $3 summarize --prompt_set 3 --best --eval_test --official
+# python runner.py $1 $2 $3 summarize --prompt_set aggregate --best --eval_test --official
 ## The mean and std in the final command is what we reported in the paper.
