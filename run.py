@@ -254,9 +254,9 @@ instantiation_schemes = {
         "distractor_count": ['"1"', '"2"', '"3"'],
     },
     "ircot_debug": {
-        "bm25_retrieval_count": "6",
-        "distractor_count": "1"
-    }
+        "bm25_retrieval_count": ["6"],
+        "distractor_count": ["1"],
+    },
 }
 
 
