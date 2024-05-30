@@ -57,7 +57,7 @@ python runner.py $1 $2 $3 write --prompt_set 1 --best
 # python runner.py $1 $2 $3 write --prompt_set 3 --best
 
 # echo ">>>> Run the experiment with best HP on the test set <<<<"
-# python runner.py $1 $2 $3 predict --prompt_set 1 --best --eval_test --official
+python runner.py $1 $2 $3 predict --prompt_set 1 --best --eval_test --official
 # python runner.py $1 $2 $3 predict --prompt_set 2 --best --eval_test --official
 # python runner.py $1 $2 $3 predict --prompt_set 3 --best --eval_test --official
 ## If prediction files already exist, it won't redo them. Pass --force if you want to redo.
