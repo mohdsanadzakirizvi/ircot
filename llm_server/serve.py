@@ -168,6 +168,9 @@ async def generate(
     keep_prompt: bool = False,
 ):
     print("PRMPT:LLM_SERVE@@@@@@@@@:\n", prompt)
+    with open("prompt_output_debug.txt", "+a") as fp:
+        fp.write("PRMPT:LLM_SERVE@@@@@@@@@:" + prompt + "\n")
+    # WRITE TO FILE WITH APPEND #
     start_time = time.time()
 
     model_shortname = os.environ["MODEL_NAME"]
