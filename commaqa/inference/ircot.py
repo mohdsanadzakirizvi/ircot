@@ -691,7 +691,7 @@ class StepByStepLLMTitleGenParticipant(ParticipantModel):
         test_example_str = re.sub(r"\n\n+", "\n\n", test_example_str)
 
         prompt = "\n\n\n".join([self.prompt, test_example_str]).strip()
-
+        print("PROMPY 694$$$$$", prompt)
         output_text_scores = self.generator.generate_text_sequence(prompt)
 
         if len(output_text_scores) > 1:
@@ -839,6 +839,7 @@ class StepByStepCOTGenParticipant(ParticipantModel):
                 test_example_str = f"Q: {question}" + "\n" + f"A: {generation_so_far}"
 
             prompt = "\n\n\n".join([self.prompt, test_example_str]).strip()
+            print("PROMPY 841$$$$$", prompt)
 
             output_text_scores = self.generator.generate_text_sequence(prompt)
             if len(output_text_scores) > 1:
