@@ -82,7 +82,7 @@ def get_gpt_tokenizer():
 class GPT3Generator:
     def __init__(
         self,
-        engine="text-davinci-002",
+        engine="gpt-4o-mini-2024-07-18",
         temperature=0,
         max_tokens=300,
         top_p=1,
@@ -108,8 +108,8 @@ class GPT3Generator:
         self.retry_after_n_seconds = retry_after_n_seconds
         self.remove_method = remove_method
 
-        if "code-davinci" not in engine:
-            raise Exception("Not allowed to prevent accidental $$ wastage.")
+        # if "code-davinci" not in engine:
+            # raise Exception("Not allowed to prevent accidental $$ wastage.")
 
         if "code-davinci" not in engine and self.retry_after_n_seconds is not None:
             raise Exception(
