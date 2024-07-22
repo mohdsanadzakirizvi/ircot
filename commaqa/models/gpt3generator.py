@@ -209,8 +209,8 @@ class GPT3Generator:
                         break
 
                 score = -sum(probs) / len(probs) if len(probs) else 100.0
-                output_seq_score.append((choice["text"], score))
+                output_seq_score.append((choice.text, score))
             else:
-                output_seq_score.append((choice["text"], index))
+                output_seq_score.append((choice.text, index))
 
         return sorted(output_seq_score, key=lambda x: x[1])
