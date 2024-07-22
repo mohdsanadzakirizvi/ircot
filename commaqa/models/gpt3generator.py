@@ -29,7 +29,7 @@ def cached_openai_call(  # kwargs doesn't work with caching.
     logprobs,
 ):
     return client.completions.create(prompt=prompt,
-    engine=engine,
+    model=engine,
     temperature=temperature,
     max_tokens=max_tokens,
     top_p=top_p,
@@ -54,10 +54,10 @@ def openai_call(
     best_of,
     logprobs,
 ):
-    function = cached_openai_call if temperature == 0 else client.Completion.create
+    function = cached_openai_call if temperature == 0 else client.completions.create
     return function(
         prompt=prompt,
-        engine=engine,
+        model=engine,
         temperature=temperature,
         max_tokens=max_tokens,
         top_p=top_p,
