@@ -54,7 +54,7 @@ def openai_call(
     best_of,
     logprobs,
 ):
-    function = cached_openai_call if temperature == 0 else openai.Completion.create
+    function = cached_openai_call if temperature == 0 else client.Completion.create
     return function(
         prompt=prompt,
         engine=engine,
