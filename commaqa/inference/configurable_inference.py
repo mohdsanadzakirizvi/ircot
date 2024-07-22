@@ -205,7 +205,7 @@ def inference_mode(args, reader, decomposer, model_map, override_answer_by=None)
 
 
 if __name__ == "__main__":
-    breakpoint()
+    # breakpoint()
     parsed_args = parse_arguments()
     if parsed_args.debug:
         logging.basicConfig(level=logging.DEBUG)
