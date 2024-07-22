@@ -198,7 +198,7 @@ class GPT3Generator:
 
         output_seq_score = []
         breakpoint()
-        for index, choice in enumerate(response.choices[0]):
+        for index, choice in enumerate(response.choices):
             if "logprobs" in choice and "token_logprobs" in choice["logprobs"]:
                 probs = []
                 for prob, tok in zip(choice["logprobs"]["token_logprobs"], choice["logprobs"]["tokens"]):
