@@ -109,11 +109,11 @@ class GPT3Generator:
         # if "code-davinci" not in model:
             # raise Exception("Not allowed to prevent accidental $$ wastage.")
 
-        if "code-davinci" not in model and self.retry_after_n_seconds is not None:
-            raise Exception(
-                "Retry is only supported for code-davinci as it's free. "
-                "Using it for other paid models is risky and so is disabled."
-            )
+        # if "code-davinci" not in model and self.retry_after_n_seconds is not None:
+        #     raise Exception(
+        #         "Retry is only supported for code-davinci as it's free. "
+        #         "Using it for other paid models is risky and so is disabled."
+        #     )
 
         if "code-davinci" in model:
             self.model_tokens_limit = 8000
