@@ -2,11 +2,11 @@ import logging
 import time
 import os
 from functools import lru_cache
-
-import openai
+from openai import OpenAI
 from diskcache import Cache
 from commaqa.inference.prompt_reader import fit_prompt_into_given_limit
 
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 logger = logging.getLogger(__name__)
 
@@ -28,19 +28,17 @@ def cached_openai_call(  # kwargs doesn't work with caching.
     best_of,
     logprobs,
 ):
-    return openai.Completion.create(
-        prompt=prompt,
-        engine=engine,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        top_p=top_p,
-        frequency_penalty=frequency_penalty,
-        presence_penalty=presence_penalty,
-        stop=stop,
-        n=n,
-        best_of=best_of,
-        logprobs=logprobs,
-    )
+    return client.completions.create(prompt=prompt,
+    engine=engine,
+    temperature=temperature,
+    max_tokens=max_tokens,
+    top_p=top_p,
+    frequency_penalty=frequency_penalty,
+    presence_penalty=presence_penalty,
+    stop=stop,
+    n=n,
+    best_of=best_of,
+    logprobs=logprobs)
 
 
 def openai_call(
