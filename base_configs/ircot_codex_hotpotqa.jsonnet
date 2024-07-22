@@ -66,7 +66,7 @@ local rc_qa_type = null; # Choices: direct, cot
             "disable_exit": true,
             "end_state": "[EOQ]",
             "gen_model": "gpt3",
-            "engine": "code-davinci-002",
+            //"engine": "code-davinci-002",
             "retry_after_n_seconds": 50,
         },
         "step_by_step_exit_controller": {
