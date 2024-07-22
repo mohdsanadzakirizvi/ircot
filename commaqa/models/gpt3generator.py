@@ -17,7 +17,7 @@ cache = Cache(os.path.expanduser("~/.cache/gpt3calls"))
 @cache.memoize()
 def cached_openai_call(  # kwargs doesn't work with caching.
     prompt,
-    engine,
+    model,
     temperature,
     max_tokens,
     top_p,
@@ -29,7 +29,7 @@ def cached_openai_call(  # kwargs doesn't work with caching.
     logprobs,
 ):
     return client.completions.create(prompt=prompt,
-    model=engine,
+    model=model,
     temperature=temperature,
     max_tokens=max_tokens,
     top_p=top_p,
@@ -43,7 +43,7 @@ def cached_openai_call(  # kwargs doesn't work with caching.
 
 def openai_call(
     prompt,
-    engine,
+    model,
     temperature,
     max_tokens,
     top_p,
@@ -57,7 +57,7 @@ def openai_call(
     function = cached_openai_call if temperature == 0 else client.completions.create
     return function(
         prompt=prompt,
-        model=engine,
+        model=model,
         temperature=temperature,
         max_tokens=max_tokens,
         top_p=top_p,
@@ -80,7 +80,7 @@ def get_gpt_tokenizer():
 class GPT3Generator:
     def __init__(
         self,
-        engine="gpt-4o-mini-2024-07-18",
+        model="gpt-4o-mini-2024-07-18",
         temperature=0,
         max_tokens=300,
         top_p=1,
@@ -93,7 +93,7 @@ class GPT3Generator:
         logprobs=0,
         remove_method="first",
     ):
-        self.engine = engine
+        self.model = model
         self.logprobs = logprobs
         self.n = n
         self.best_of = best_of
@@ -106,16 +106,16 @@ class GPT3Generator:
         self.retry_after_n_seconds = retry_after_n_seconds
         self.remove_method = remove_method
 
-        # if "code-davinci" not in engine:
+        # if "code-davinci" not in model:
             # raise Exception("Not allowed to prevent accidental $$ wastage.")
 
-        if "code-davinci" not in engine and self.retry_after_n_seconds is not None:
+        if "code-davinci" not in model and self.retry_after_n_seconds is not None:
             raise Exception(
                 "Retry is only supported for code-davinci as it's free. "
                 "Using it for other paid models is risky and so is disabled."
             )
 
-        if "code-davinci" in engine:
+        if "code-davinci" in model:
             self.model_tokens_limit = 8000
         else:
             self.model_tokens_limit = 2000
@@ -140,7 +140,7 @@ class GPT3Generator:
         )
 
         arguments = {
-            "engine": self.engine,
+            "model": self.model,
             "prompt": prompt,
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
