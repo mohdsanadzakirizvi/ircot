@@ -80,7 +80,8 @@ def get_gpt_tokenizer():
 class GPT3Generator:
     def __init__(
         self,
-        model="gpt-4o-mini-2024-07-18",
+        # model="gpt-4o-mini-2024-07-18",
+        model="davinci-002",
         temperature=0,
         max_tokens=300,
         top_p=1,
