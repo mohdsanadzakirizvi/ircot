@@ -197,8 +197,8 @@ class GPT3Generator:
             raise Exception("Could not complete OpenAI call")
 
         output_seq_score = []
-
-        for index, choice in enumerate(response["choices"]):
+        breakpoint()
+        for index, choice in enumerate(response['choices'][0]):
             if "logprobs" in choice and "token_logprobs" in choice["logprobs"]:
                 probs = []
                 for prob, tok in zip(choice["logprobs"]["token_logprobs"], choice["logprobs"]["tokens"]):
