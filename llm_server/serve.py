@@ -167,10 +167,10 @@ async def generate(
     length_penalty: float = None,
     eos_text: str = None,
     keep_prompt: bool = False,
-    alpha: float = 1.0,  # Context weight for CAD
+    alpha: float = 0.5,  # Context weight for CAD
 ):
     print("PRMPT:LLM_SERVE@@@@@@@@@:\n", prompt)
-    # breakpoint()
+    breakpoint()
     with open("/tmp/prompt_output_debug.txt", "+a") as fp:
         fp.write("PRMPT:LLM_SERVE@@@@@@@@@:" + prompt + "\n")
     # WRITE TO FILE WITH APPEND #
