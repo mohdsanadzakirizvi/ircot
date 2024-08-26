@@ -231,15 +231,22 @@ async def generate(
     logits_with_context = generated_output.logits
     logits_without_context = generated_output_without_context.logits
 
+    # Determine the minimum length of the logits because removing the context can result in shorter or longer output
+    min_length = min(len(logits_with_context), len(logits_without_context))
+
     # Implementing Context-Aware Decoding (CAD)
     logits_combined = []
-    for i in range(len(logits_with_context)):
+    for i in range(min_length):
         logit_cxy = logits_with_context[i]  # logit_theta(yt | c, x, y<t)
         logit_xy = logits_without_context[i]  # logit_theta(yt | x, y<t)
 
         # Apply the CAD formula
         combined_logit = ((1 + alpha) * logit_cxy) - (alpha * logit_xy)
         logits_combined.append(combined_logit)
+
+        # Use the remaining logits from logits_with_context beyond min_length if it exists to ensure that all available information is used in the final generation
+        if len(logits_with_context) > min_length:
+            logits_combined.extend(logits_with_context[min_length:])
 
     # Decode the sequences based on the combined logits
     generated_ids = torch.argmax(torch.stack(logits_combined), dim=-1)
