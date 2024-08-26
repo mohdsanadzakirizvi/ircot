@@ -154,6 +154,7 @@ async def index():
 @app.get("/generate/")
 async def generate(
     prompt: str,
+    prompt_without_context: str = "",
     max_input: int = None,
     max_length: int = 200,
     min_length: int = 1,
@@ -166,6 +167,7 @@ async def generate(
     length_penalty: float = None,
     eos_text: str = None,
     keep_prompt: bool = False,
+    alpha: float = 1.0,  # Context weight for CAD
 ):
     print("PRMPT:LLM_SERVE@@@@@@@@@:\n", prompt)
     # breakpoint()
@@ -178,6 +180,7 @@ async def generate(
 
     model, tokenizer = get_model_and_tokenizer()
     inputs = tokenizer.encode(prompt, return_tensors="pt", max_length=max_input).cuda()
+    inputs_without_context = tokenizer.encode(prompt_without_context, return_tensors="pt", max_length=max_input).cuda()
 
     stopping_criteria_list = StoppingCriteriaList()
     if eos_text:
@@ -187,6 +190,8 @@ async def generate(
     # T0pp, ul2 and flan are the only encoder-decoder model, and so don't have prompt part in its generation.
     is_encoder_decoder = model_shortname in ["T0pp", "ul2"] or model_shortname.startswith("flan-t5")
     # max_length_ = max_length if is_encoder_decoder else inputs.shape[1]+max_length
+
+    # Generate logits with context
     generated_output = model.generate(
         inputs,
         # max_length=max_length_,
@@ -201,9 +206,43 @@ async def generate(
         repetition_penalty=repetition_penalty,
         length_penalty=length_penalty,
         stopping_criteria=stopping_criteria_list,
-        output_scores=False,  # make it configurable later. It turns in generated_output["scores"]
+        output_logits=True,  # Use output_logits to get raw logits
     )
-    generated_ids = generated_output["sequences"]
+
+    # Generate logits without context
+    generated_output_without_context = model.generate(
+        inputs_without_context,
+        # max_length=max_length_,
+        max_new_tokens=max_length,
+        min_length=min_length,
+        do_sample=do_sample,
+        temperature=temperature,
+        top_k=top_k,
+        top_p=top_p,
+        num_return_sequences=num_return_sequences,
+        return_dict_in_generate=True,
+        repetition_penalty=repetition_penalty,
+        length_penalty=length_penalty,
+        stopping_criteria=stopping_criteria_list,
+        output_logits=True,  # Use output_logits to get raw logits
+    )
+
+    # Extract logits for the generated tokens
+    logits_with_context = generated_output.logits
+    logits_without_context = generated_output_without_context.logits
+
+    # Implementing Context-Aware Decoding (CAD)
+    logits_combined = []
+    for i in range(len(logits_with_context)):
+        logit_cxy = logits_with_context[i]  # logit_theta(yt | c, x, y<t)
+        logit_xy = logits_without_context[i]  # logit_theta(yt | x, y<t)
+
+        # Apply the CAD formula
+        combined_logit = ((1 + alpha) * logit_cxy) - (alpha * logit_xy)
+        logits_combined.append(combined_logit)
+
+    # Decode the sequences based on the combined logits
+    generated_ids = torch.argmax(torch.stack(logits_combined), dim=-1)
     generated_texts = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
 
     generated_num_tokens = [len(generated_ids_) for generated_ids_ in generated_ids]

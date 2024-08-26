@@ -39,11 +39,14 @@ class LLMQAModel:
             elif isinstance(context, list):
                 context = "\n\n".join(context)
             if context:
+                question_prompt_without_context = question_prompt
                 question_prompt += "\n\n" + context + context_suffix
 
         question_prompt += "\n\nQ: " + input_question + "\nA:"
+        question_prompt_without_context += "\n\nQ: " + input_question + "\nA:"
+        
         # print("<QA>: ... %s" % question_prompt[-500:])
-        output_text_scores = self.generator.generate_text_sequence(question_prompt)
+        output_text_scores = self.generator.generate_text_sequence(question_prompt, question_prompt_without_context)
 
         self.num_calls += 1
         if len(output_text_scores) > 1:

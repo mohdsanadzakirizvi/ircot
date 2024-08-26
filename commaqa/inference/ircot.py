@@ -691,8 +691,11 @@ class StepByStepLLMTitleGenParticipant(ParticipantModel):
         test_example_str = re.sub(r"\n\n+", "\n\n", test_example_str)
 
         prompt = "\n\n\n".join([self.prompt, test_example_str]).strip()
+        # CAD isn't needed when generating title for retrieval
+        prompt_without_context = prompt
+
         print("PROMPY 694$$$$$", prompt)
-        output_text_scores = self.generator.generate_text_sequence(prompt)
+        output_text_scores = self.generator.generate_text_sequence(prompt, prompt_without_context)
 
         if len(output_text_scores) > 1:
             print("Can not handle more than one answer for this model yet" + "\n" + str(output_text_scores))
@@ -838,10 +841,15 @@ class StepByStepCOTGenParticipant(ParticipantModel):
             else:
                 test_example_str = f"Q: {question}" + "\n" + f"A: {generation_so_far}"
 
+            # Without context, only input for CAD base setting
+            test_example_str_without_context = f"Q: {question}" + "\n" + f"A: {generation_so_far}"
+
             prompt = "\n\n\n".join([self.prompt, test_example_str]).strip()
+            prompt_without_context = "\n\n\n".join([self.prompt, test_example_str_without_context]).strip()
+
             print("PROMPY 841$$$$$", prompt)
 
-            output_text_scores = self.generator.generate_text_sequence(prompt)
+            output_text_scores = self.generator.generate_text_sequence(prompt, prompt_without_context)
             if len(output_text_scores) > 1:
                 print("Can not handle more than one answer for this model yet" + "\n" + str(output_text_scores))
 

@@ -10,6 +10,7 @@ cache = Cache(os.path.expanduser("~/.cache/llmcalls"))
 
 def non_cached_llm_call(  # kwargs doesn't work with caching.
     prompt,
+    prompt_without_context,
     model_name,
     max_input=None,
     max_length=100,
@@ -26,6 +27,7 @@ def non_cached_llm_call(  # kwargs doesn't work with caching.
 
     params = {
         "prompt": prompt,
+        "prompt_without_context" : prompt_without_context,
         "max_input": max_input,
         "max_length": max_length,
         "min_length": min_length,
@@ -70,6 +72,7 @@ def non_cached_llm_call(  # kwargs doesn't work with caching.
 @cache.memoize()
 def cached_llm_call(  # kwargs doesn't work with caching.
     prompt,
+    prompt_without_context,
     model_name,
     max_input=None,
     max_length=100,
@@ -85,6 +88,7 @@ def cached_llm_call(  # kwargs doesn't work with caching.
 ) -> Dict:
     return non_cached_llm_call(
         prompt,
+        prompt_without_context,
         model_name,
         max_input=max_input,
         max_length=max_length,
@@ -102,6 +106,7 @@ def cached_llm_call(  # kwargs doesn't work with caching.
 
 def llm_call(
     prompt,
+    prompt_without_context,
     model_name,
     max_input=None,
     max_length=100,
@@ -118,6 +123,7 @@ def llm_call(
     function = cached_llm_call if not do_sample and temperature > 0 else non_cached_llm_call
     return function(
         prompt,
+        prompt_without_context,
         model_name,
         max_input=max_input,
         max_length=max_length,
@@ -188,12 +194,13 @@ class LLMClientGenerator:
         self.model_tokens_limit = model_tokens_limit
         self.remove_method = remove_method
 
-    def generate_text_sequence(self, prompt):
+    def generate_text_sequence(self, prompt, prompt_without_context):
         """
         :param input_text:
         :return: returns a sequence of tuples (string, score) where lower score is better
         """
         prompt = prompt.rstrip()
+        prompt_without_context = prompt_without_context.rstrip()
 
         prompt = fit_prompt_into_given_limit(
             original_prompt=prompt,
@@ -206,9 +213,21 @@ class LLMClientGenerator:
             last_is_test_example=True,
         )
 
+        prompt_without_context = fit_prompt_into_given_limit(
+            original_prompt=prompt_without_context,
+            model_length_limit=self.model_tokens_limit,
+            estimated_generation_length=self.max_length,
+            demonstration_delimiter="\n\n\n",
+            shuffle=False,
+            remove_method=self.remove_method,
+            tokenizer_model_name=self.model_name,
+            last_is_test_example=True,
+        )
+
         # Note: Don't pass eos_text. Doesn't seem to work right.
         params = {
             "prompt": prompt,
+            "prompt_without_context" : prompt_without_context,
             "model_name": self.model_name,
             "max_input": self.max_input,
             "max_length": self.max_length,
