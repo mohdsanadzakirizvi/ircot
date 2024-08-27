@@ -171,7 +171,7 @@ async def generate(
     alpha: float = 0.5,  # Context weight for CAD
 ):
     print("PRMPT:LLM_SERVE@@@@@@@@@:\n", prompt)
-    breakpoint()
+    import pdb; pdb.set_trace()
     with open("/tmp/prompt_output_debug.txt", "+a") as fp:
         fp.write("PRMPT:LLM_SERVE@@@@@@@@@:" + prompt + "\n")
     # WRITE TO FILE WITH APPEND #
