@@ -15,6 +15,7 @@ if "TRANSFORMERS_CACHE" not in os.environ:
     )
 
 import torch
+import torch.nn.functional as F
 from transformers.generation.stopping_criteria import StoppingCriteria, StoppingCriteriaList
 from transformers.utils.import_utils import is_torch_bf16_gpu_available
 from transformers import (
@@ -247,6 +248,9 @@ async def generate(
         # Use the remaining logits from logits_with_context beyond min_length if it exists to ensure that all available information is used in the final generation
         if len(logits_with_context) > min_length:
             logits_combined.extend(logits_with_context[min_length:])
+
+    # Apply softmax to convert logits into probabilities
+    logits_combined = [F.softmax(logit, dim=-1) for logit in logits_combined]
 
     # Decode the sequences based on the combined logits
     generated_ids = torch.argmax(torch.stack(logits_combined), dim=-1)
