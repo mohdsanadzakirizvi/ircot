@@ -260,9 +260,6 @@ async def generate(
     # Adjust shape to match the expected [1, sequence_length]
     generated_ids = generated_ids.transpose(0, 1)  # Swap to [batch_size, sequence_length]
 
-    # If necessary, add a dimension to match [1, sequence_length] (if batch size is 1)
-    generated_ids = generated_ids.unsqueeze(0)
-
     # Decode the sequences as a whole
     generated_texts = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
 
