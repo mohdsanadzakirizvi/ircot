@@ -249,9 +249,21 @@ async def generate(
 
     # Apply softmax to convert logits into probabilities
     logits_combined = [F.softmax(logit, dim=-1) for logit in logits_combined]
-    # breakpoint()
-    # Decode the sequences based on the combined logits
-    generated_ids = torch.argmax(torch.stack(logits_combined), dim=-1)
+    breakpoint()
+    # Stack logits and apply argmax to select token IDs
+    logits_combined_tensor = torch.stack(logits_combined)
+
+    # Apply argmax along the vocabulary dimension
+    # This should give a tensor with shape [sequence_length, batch_size]
+    generated_ids = torch.argmax(logits_combined_tensor, dim=-1)
+
+    # Adjust shape to match the expected [1, sequence_length]
+    generated_ids = generated_ids.transpose(0, 1)  # Swap to [batch_size, sequence_length]
+
+    # If necessary, add a dimension to match [1, sequence_length] (if batch size is 1)
+    generated_ids = generated_ids.unsqueeze(0)
+
+    # Decode the sequences as a whole
     generated_texts = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
 
     generated_num_tokens = [len(generated_ids_) for generated_ids_ in generated_ids]
