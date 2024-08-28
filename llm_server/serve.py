@@ -168,12 +168,10 @@ async def generate(
     length_penalty: float = None,
     eos_text: str = None,
     keep_prompt: bool = False,
-    alpha: float = 0.5,  # Context weight for CAD
+    alpha: float = 0.1,  # Context weight for CAD
 ):
-    print("PRMPT:LLM_SERVE@@@@@@@@@:\n", prompt)
-    import pdb; pdb.set_trace()
-    with open("/tmp/prompt_output_debug.txt", "+a") as fp:
-        fp.write("PRMPT:LLM_SERVE@@@@@@@@@:" + prompt + "\n")
+    # print("PRMPT:LLM_SERVE@@@@@@@@@:\n", prompt)
+    breakpoint()
     # WRITE TO FILE WITH APPEND #
     start_time = time.time()
 
@@ -251,7 +249,7 @@ async def generate(
 
     # Apply softmax to convert logits into probabilities
     logits_combined = [F.softmax(logit, dim=-1) for logit in logits_combined]
-
+    breakpoint()
     # Decode the sequences based on the combined logits
     generated_ids = torch.argmax(torch.stack(logits_combined), dim=-1)
     generated_texts = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
