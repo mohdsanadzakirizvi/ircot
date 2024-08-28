@@ -850,6 +850,7 @@ class StepByStepCOTGenParticipant(ParticipantModel):
             print("PROMPY 841$$$$$", prompt)
 
             output_text_scores = self.generator.generate_text_sequence(prompt, prompt_without_context)
+            breakpoint()
             if len(output_text_scores) > 1:
                 print("Can not handle more than one answer for this model yet" + "\n" + str(output_text_scores))
 

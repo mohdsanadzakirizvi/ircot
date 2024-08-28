@@ -171,7 +171,7 @@ async def generate(
     alpha: float = 0.1,  # Context weight for CAD
 ):
     # print("PRMPT:LLM_SERVE@@@@@@@@@:\n", prompt)
-    breakpoint()
+    # breakpoint()
     # WRITE TO FILE WITH APPEND #
     start_time = time.time()
 
@@ -249,7 +249,7 @@ async def generate(
 
     # Apply softmax to convert logits into probabilities
     logits_combined = [F.softmax(logit, dim=-1) for logit in logits_combined]
-    breakpoint()
+    # breakpoint()
     # Decode the sequences based on the combined logits
     generated_ids = torch.argmax(torch.stack(logits_combined), dim=-1)
     generated_texts = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
