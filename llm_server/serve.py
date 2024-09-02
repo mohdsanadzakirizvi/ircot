@@ -168,7 +168,7 @@ async def generate(
     length_penalty: float = None,
     eos_text: str = None,
     keep_prompt: bool = False,
-    alpha: float = 0.1,  # Context weight for CAD
+    alpha: float = 0.3,  # Context weight for CAD
 ):
     # print("PRMPT:LLM_SERVE@@@@@@@@@:\n", prompt)
     # breakpoint()
@@ -243,15 +243,17 @@ async def generate(
         combined_logit = ((1 + alpha) * logit_cxy) - (alpha * logit_xy)
         logits_combined.append(combined_logit)
 
-        # Use the remaining logits from logits_with_context beyond min_length if it exists to ensure that all available information is used in the final generation
-        if len(logits_with_context) > min_length:
-            logits_combined.extend(logits_with_context[min_length:])
+        ## Use the remaining logits from logits_with_context beyond min_length if it exists to ensure that all available information is used in the final generation
+        #if len(logits_with_context) > min_length:
+        #    logits_combined.extend(logits_with_context[min_length:])
 
-    # Apply softmax to convert logits into probabilities
-    logits_combined = [F.softmax(logit, dim=-1) for logit in logits_combined]
-    breakpoint()
+    ## Apply softmax to convert logits into probabilities
+    #logits_combined = [F.softmax(logit, dim=-1) for logit in logits_combined]
+    # breakpoint()
     # Stack logits and apply argmax to select token IDs
     logits_combined_tensor = torch.stack(logits_combined)
+    # Softmax
+    logits_combined_tensor = F.softmax(logits_combined_tensor, dim=-1)
 
     # Apply argmax along the vocabulary dimension
     # This should give a tensor with shape [sequence_length, batch_size]
