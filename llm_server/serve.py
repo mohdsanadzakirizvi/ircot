@@ -168,108 +168,65 @@ async def generate(
     length_penalty: float = None,
     eos_text: str = None,
     keep_prompt: bool = False,
-    alpha: float = 0.3,  # Context weight for CAD
+    alpha: float = 0.1,  # Context weight for CAD
 ):
-    # print("PRMPT:LLM_SERVE@@@@@@@@@:\n", prompt)
-    # breakpoint()
-    # WRITE TO FILE WITH APPEND #
     start_time = time.time()
 
     model_shortname = os.environ["MODEL_NAME"]
-
     model, tokenizer = get_model_and_tokenizer()
+
+    # Prepare inputs
     inputs = tokenizer.encode(prompt, return_tensors="pt", max_length=max_input).cuda()
     inputs_without_context = tokenizer.encode(prompt_without_context, return_tensors="pt", max_length=max_input).cuda()
 
-    stopping_criteria_list = StoppingCriteriaList()
-    if eos_text:
-        stopping_criteria = EOSReachedCriteria(tokenizer=tokenizer, eos_text=eos_text)
-        stopping_criteria_list = StoppingCriteriaList([stopping_criteria])
+    # Initialize variables for iterative decoding
+    cur_len = 0
+    max_new_tokens = max_length
+    past_key_values = None
+    generated_ids = inputs
+    generated_ids_with_context = inputs_without_context
 
-    # T0pp, ul2 and flan are the only encoder-decoder model, and so don't have prompt part in its generation.
-    is_encoder_decoder = model_shortname in ["T0pp", "ul2"] or model_shortname.startswith("flan-t5")
-    # max_length_ = max_length if is_encoder_decoder else inputs.shape[1]+max_length
+    while cur_len < max_new_tokens:
+        # Generate logits for the current step without using context
+        outputs = model(
+            input_ids=generated_ids,
+            past_key_values=past_key_values,
+            use_cache=True,
+            return_dict=True,
+        )
+        logits_without_context = outputs.logits[:, -1, :]
 
-    # Generate logits with context
-    generated_output = model.generate(
-        inputs,
-        # max_length=max_length_,
-        max_new_tokens=max_length,
-        min_length=min_length,
-        do_sample=do_sample,
-        temperature=temperature,
-        top_k=top_k,
-        top_p=top_p,
-        num_return_sequences=num_return_sequences,
-        return_dict_in_generate=True,
-        repetition_penalty=repetition_penalty,
-        length_penalty=length_penalty,
-        stopping_criteria=stopping_criteria_list,
-        output_logits=True,  # Use output_logits to get raw logits
-    )
+        outputs_with_context = model(
+            input_ids=generated_ids_with_context,
+            past_key_values=outputs.past_key_values,
+            use_cache=True,
+            return_dict=True,
+        )
+        logits_with_context = outputs_with_context.logits[:, -1, :]
 
-    # Generate logits without context
-    generated_output_without_context = model.generate(
-        inputs_without_context,
-        # max_length=max_length_,
-        max_new_tokens=max_length,
-        min_length=min_length,
-        do_sample=do_sample,
-        temperature=temperature,
-        top_k=top_k,
-        top_p=top_p,
-        num_return_sequences=num_return_sequences,
-        return_dict_in_generate=True,
-        repetition_penalty=repetition_penalty,
-        length_penalty=length_penalty,
-        stopping_criteria=stopping_criteria_list,
-        output_logits=True,  # Use output_logits to get raw logits
-    )
+        # Apply CAD adjustments
+        combined_logit = (1 + alpha) * logits_with_context - alpha * logits_without_context
 
-    # Extract logits for the generated tokens
-    logits_with_context = generated_output.logits
-    logits_without_context = generated_output_without_context.logits
+        # Apply softmax and sampling
+        combined_logit = F.softmax(combined_logit / temperature, dim=-1)
+        next_token = torch.argmax(combined_logit, dim=-1)
 
-    # Determine the minimum length of the logits because removing the context can result in shorter or longer output
-    min_length = min(len(logits_with_context), len(logits_without_context))
+        # Stop decoding if EOS token is generated
+        if next_token.item() == tokenizer.eos_token_id:
+            break
 
-    # Implementing Context-Aware Decoding (CAD)
-    logits_combined = []
-    for i in range(min_length):
-        logit_cxy = logits_with_context[i]  # logit_theta(yt | c, x, y<t)
-        logit_xy = logits_without_context[i]  # logit_theta(yt | x, y<t)
+        # Update inputs and context for next iteration
+        generated_ids = torch.cat([generated_ids, next_token.unsqueeze(-1)], dim=-1)
+        generated_ids_with_context = torch.cat([generated_ids_with_context, next_token.unsqueeze(-1)], dim=-1)
+        past_key_values = outputs_with_context.past_key_values
+        cur_len += 1
 
-        # Apply the CAD formula
-        combined_logit = ((1 + alpha) * logit_cxy) - (alpha * logit_xy)
-        logits_combined.append(combined_logit)
-
-        ## Use the remaining logits from logits_with_context beyond min_length if it exists to ensure that all available information is used in the final generation
-        #if len(logits_with_context) > min_length:
-        #    logits_combined.extend(logits_with_context[min_length:])
-
-    ## Apply softmax to convert logits into probabilities
-    #logits_combined = [F.softmax(logit, dim=-1) for logit in logits_combined]
-    # breakpoint()
-    # Stack logits and apply argmax to select token IDs
-    logits_combined_tensor = torch.stack(logits_combined)
-    # Softmax
-    logits_combined_tensor = F.softmax(logits_combined_tensor, dim=-1)
-
-    # Apply argmax along the vocabulary dimension
-    # This should give a tensor with shape [sequence_length, batch_size]
-    generated_ids = torch.argmax(logits_combined_tensor, dim=-1)
-
-    # Adjust shape to match the expected [1, sequence_length]
-    generated_ids = generated_ids.transpose(0, 1)  # Swap to [batch_size, sequence_length]
-
-    # Decode the sequences as a whole
+    # Decode generated tokens
     generated_texts = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
 
     generated_num_tokens = [len(generated_ids_) for generated_ids_ in generated_ids]
     if not keep_prompt and not is_encoder_decoder:
-        generated_texts = [
-            generated_text[generated_text.index(prompt) + len(prompt) :] for generated_text in generated_texts
-        ]
+        generated_texts = [generated_text[generated_text.index(prompt) + len(prompt):] for generated_text in generated_texts]
     elif keep_prompt and is_encoder_decoder:
         generated_texts = [prompt + generated_text for generated_text in generated_texts]
 
@@ -281,6 +238,8 @@ async def generate(
         "run_time_in_seconds": run_time_in_seconds,
         "model_name": model_shortname,
     }
+
+
 
 
 print("\nLoading model and tokenizer.")
