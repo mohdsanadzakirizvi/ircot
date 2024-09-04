@@ -152,6 +152,30 @@ async def index():
     return {"message": f"Hello! This is a server for {model_shortname}. " "Go to /generate/ for generation requests."}
 
 
+def apply_top_p_sampling(logits, top_p=0.9):
+    """Applies top-p (nucleus) sampling to filter logits."""
+    sorted_logits, sorted_indices = torch.sort(logits, descending=True)
+    cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
+
+    # Remove tokens with cumulative probability above top_p
+    sorted_indices_to_remove = cumulative_probs > top_p
+    sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
+    sorted_indices_to_remove[..., 0] = 0
+
+    indices_to_remove = sorted_indices_to_remove.scatter(1, sorted_indices, sorted_indices_to_remove)
+    logits[indices_to_remove] = -float('Inf')  # Set removed tokens to a very low value
+    return logits
+
+def apply_repetition_penalty(logits, generated_tokens, penalty=1.2):
+    """Applies repetition penalty to discourage repeated tokens."""
+    for i, token_set in enumerate(generated_tokens):
+        for token in token_set:
+            if logits[i, token] < 0:
+                logits[i, token] *= penalty
+            else:
+                logits[i, token] /= penalty
+    return logits
+
 @app.get("/generate/")
 async def generate(
     prompt: str,
@@ -159,10 +183,10 @@ async def generate(
     max_input: int = None,
     max_length: int = 200,
     min_length: int = 1,
-    do_sample: bool = False,
+    do_sample: bool = True,
     temperature: float = 1.0,
     top_k: int = 50,
-    top_p: float = 1.0,
+    top_p: float = 0.9,
     num_return_sequences: int = 1,
     repetition_penalty: float = None,
     length_penalty: float = None,
@@ -187,6 +211,7 @@ async def generate(
     generated_ids = inputs
     generated_ids_with_context = inputs_without_context
     past_key_values = None  # Only used for causal models
+    generated_tokens = [set() for _ in range(generated_ids.size(0))]  # Track generated tokens for repetition penalty
 
     while cur_len < max_length:
         # Generate logits for the current step without using context
@@ -212,6 +237,14 @@ async def generate(
         # Apply CAD adjustments
         combined_logit = (1 + alpha) * logits_with_context - alpha * logits_without_context
 
+        # Apply repetition penalty if enabled
+        if repetition_penalty:
+            combined_logit = apply_repetition_penalty(combined_logit, generated_tokens, repetition_penalty)
+
+        # Apply top-p sampling if enabled
+        if do_sample and top_p < 1.0:
+            combined_logit = apply_top_p_sampling(combined_logit, top_p)
+
         # Apply softmax and sampling
         combined_logit = F.softmax(combined_logit / temperature, dim=-1)
         next_token = torch.argmax(combined_logit, dim=-1)
@@ -225,6 +258,10 @@ async def generate(
         generated_ids_with_context = torch.cat([generated_ids_with_context, next_token.unsqueeze(-1)], dim=-1)
         past_key_values = outputs_with_context.past_key_values if not is_encoder_decoder else None
         cur_len += 1
+
+        # Track generated tokens for repetition penalty
+        for i, token in enumerate(next_token.tolist()):
+            generated_tokens[i].add(token)
 
     # Decode generated tokens
     generated_texts = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
