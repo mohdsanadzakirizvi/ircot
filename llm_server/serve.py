@@ -180,7 +180,7 @@ def apply_repetition_penalty(logits, generated_tokens, penalty=1.2):
 async def generate(
     prompt: str,
     prompt_without_context: str = "",
-    max_input: int = None,
+    max_input: int = 500,
     max_length: int = 200,
     min_length: int = 1,
     do_sample: bool = False,
@@ -200,8 +200,8 @@ async def generate(
     model, tokenizer = get_model_and_tokenizer()
 
     # Prepare inputs
-    inputs_with_context = tokenizer.encode(prompt, return_tensors="pt", max_length=max_length).cuda()
-    inputs_without_context = tokenizer.encode(prompt_without_context, return_tensors="pt", max_length=length).cuda()
+    inputs_with_context = tokenizer.encode(prompt, return_tensors="pt", max_length=max_input).cuda()
+    inputs_without_context = tokenizer.encode(prompt_without_context, return_tensors="pt", max_length=max_input).cuda()
 
     # Check if the model is encoder-decoder (FLAN-T5) or causal (GPT-like)
     is_encoder_decoder = model.config.is_encoder_decoder
@@ -210,30 +210,33 @@ async def generate(
     cur_len = 0
     generated_ids_without_context = inputs_without_context
     generated_ids_with_context = inputs_with_context
-    past_key_values = None  # Only used for causal models
+    past_key_values_with_context = None
+    past_key_values_without_context = None
     generated_tokens = [[] for _ in range(generated_ids_with_context.size(0))]  # Track generated tokens for repetition penalty
 
-    with torch.inference_mode():  # Enable inference mode for better performance and memory efficiency
+    with torch.no_grad():  # Corrected to use torch.no_grad() for inference mode
         while cur_len < max_length:
             # Generate logits for the current step without using context
             outputs_without_context = model(
                 input_ids=generated_ids_without_context,
-                decoder_input_ids=generated_ids_without_context[:, -1:] if is_encoder_decoder else None,  # For Seq2Seq models like FLAN-T5
-                past_key_values=past_key_values if not is_encoder_decoder else None,
-                use_cache=not is_encoder_decoder,  # Use cache only for causal models
+                decoder_input_ids=generated_ids_without_context[:, -1:] if is_encoder_decoder else None,
+                past_key_values=past_key_values_without_context if not is_encoder_decoder else None,
+                use_cache=not is_encoder_decoder,
                 return_dict=True,
             )
             logits_without_context = outputs_without_context.logits[:, -1, :]
+            past_key_values_without_context = outputs_without_context.past_key_values
 
             # Generate logits with context
             outputs_with_context = model(
                 input_ids=generated_ids_with_context,
                 decoder_input_ids=generated_ids_with_context[:, -1:] if is_encoder_decoder else None,
-                past_key_values=outputs_without_context.past_key_values if not is_encoder_decoder else None,
+                past_key_values=past_key_values_with_context if not is_encoder_decoder else None,
                 use_cache=not is_encoder_decoder,
                 return_dict=True,
             )
             logits_with_context = outputs_with_context.logits[:, -1, :]
+            past_key_values_with_context = outputs_with_context.past_key_values
 
             # Apply CAD adjustments
             combined_logit = (1 + alpha) * logits_with_context - alpha * logits_without_context
@@ -254,10 +257,9 @@ async def generate(
             if next_token.item() == tokenizer.eos_token_id:
                 break
 
-            # Update inputs and context for next iteration
+            # Update inputs and context for the next iteration
             generated_ids_without_context = torch.cat([generated_ids_without_context, next_token.unsqueeze(-1)], dim=-1)
             generated_ids_with_context = torch.cat([generated_ids_with_context, next_token.unsqueeze(-1)], dim=-1)
-            past_key_values = outputs_with_context.past_key_values if not is_encoder_decoder else None
             cur_len += 1
 
             # Track generated tokens for repetition penalty
@@ -281,11 +283,6 @@ async def generate(
         "run_time_in_seconds": run_time_in_seconds,
         "model_name": model_shortname,
     }
-
-
-
-
-
 
 print("\nLoading model and tokenizer.")
 get_model_and_tokenizer()
