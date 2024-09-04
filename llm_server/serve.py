@@ -183,7 +183,7 @@ async def generate(
     max_input: int = None,
     max_length: int = 200,
     min_length: int = 1,
-    do_sample: bool = True,
+    do_sample: bool = False,
     temperature: float = 1.0,
     top_k: int = 50,
     top_p: float = 0.9,
@@ -200,7 +200,7 @@ async def generate(
     model, tokenizer = get_model_and_tokenizer()
 
     # Prepare inputs
-    inputs = tokenizer.encode(prompt, return_tensors="pt", max_length=max_input).cuda()
+    inputs_with_context = tokenizer.encode(prompt, return_tensors="pt", max_length=max_input).cuda()
     inputs_without_context = tokenizer.encode(prompt_without_context, return_tensors="pt", max_length=max_input).cuda()
 
     # Check if the model is encoder-decoder (FLAN-T5) or causal (GPT-like)
@@ -208,28 +208,28 @@ async def generate(
 
     # Initialize variables for iterative decoding
     cur_len = 0
-    generated_ids = inputs
-    generated_ids_with_context = inputs_without_context
+    generated_ids_without_context = inputs_without_context
+    generated_ids_with_context = inputs_with_context
     past_key_values = None  # Only used for causal models
-    generated_tokens = [set() for _ in range(generated_ids.size(0))]  # Track generated tokens for repetition penalty
+    generated_tokens = [[] for _ in range(generated_ids_with_context.size(0))]  # Track generated tokens for repetition penalty
 
     with torch.inference_mode():  # Enable inference mode for better performance and memory efficiency
         while cur_len < max_length:
             # Generate logits for the current step without using context
-            outputs = model(
-                input_ids=generated_ids,
-                decoder_input_ids=generated_ids[:, -1:] if is_encoder_decoder else None,  # For Seq2Seq models like FLAN-T5
+            outputs_without_context = model(
+                input_ids=generated_ids_without_context,
+                decoder_input_ids=generated_ids_without_context[:, -1:] if is_encoder_decoder else None,  # For Seq2Seq models like FLAN-T5
                 past_key_values=past_key_values if not is_encoder_decoder else None,
                 use_cache=not is_encoder_decoder,  # Use cache only for causal models
                 return_dict=True,
             )
-            logits_without_context = outputs.logits[:, -1, :]
+            logits_without_context = outputs_without_context.logits[:, -1, :]
 
             # Generate logits with context
             outputs_with_context = model(
                 input_ids=generated_ids_with_context,
                 decoder_input_ids=generated_ids_with_context[:, -1:] if is_encoder_decoder else None,
-                past_key_values=outputs.past_key_values if not is_encoder_decoder else None,
+                past_key_values=outputs_without_context.past_key_values if not is_encoder_decoder else None,
                 use_cache=not is_encoder_decoder,
                 return_dict=True,
             )
@@ -255,19 +255,19 @@ async def generate(
                 break
 
             # Update inputs and context for next iteration
-            generated_ids = torch.cat([generated_ids, next_token.unsqueeze(-1)], dim=-1)
+            generated_ids_without_context = torch.cat([generated_ids_without_context, next_token.unsqueeze(-1)], dim=-1)
             generated_ids_with_context = torch.cat([generated_ids_with_context, next_token.unsqueeze(-1)], dim=-1)
             past_key_values = outputs_with_context.past_key_values if not is_encoder_decoder else None
             cur_len += 1
 
             # Track generated tokens for repetition penalty
             for i, token in enumerate(next_token.tolist()):
-                generated_tokens[i].add(token)
+                generated_tokens[i].append(token)
 
     # Decode generated tokens
-    generated_texts = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
+    generated_texts = tokenizer.batch_decode([tokens for tokens in generated_tokens], skip_special_tokens=True)
 
-    generated_num_tokens = [len(generated_ids_) for generated_ids_ in generated_ids]
+    generated_num_tokens = [len(tokens) for tokens in generated_tokens]
     if not keep_prompt and not is_encoder_decoder:
         generated_texts = [generated_text[generated_text.index(prompt) + len(prompt):] for generated_text in generated_texts]
     elif keep_prompt and is_encoder_decoder:
@@ -281,6 +281,7 @@ async def generate(
         "run_time_in_seconds": run_time_in_seconds,
         "model_name": model_shortname,
     }
+
 
 
 
