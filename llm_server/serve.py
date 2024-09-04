@@ -200,8 +200,8 @@ async def generate(
     model, tokenizer = get_model_and_tokenizer()
 
     # Prepare inputs
-    inputs_with_context = tokenizer.encode(prompt, return_tensors="pt", max_length=max_input).cuda()
-    inputs_without_context = tokenizer.encode(prompt_without_context, return_tensors="pt", max_length=max_input).cuda()
+    inputs_with_context = tokenizer.encode(prompt, return_tensors="pt", max_length=max_length).cuda()
+    inputs_without_context = tokenizer.encode(prompt_without_context, return_tensors="pt", max_length=length).cuda()
 
     # Check if the model is encoder-decoder (FLAN-T5) or causal (GPT-like)
     is_encoder_decoder = model.config.is_encoder_decoder
