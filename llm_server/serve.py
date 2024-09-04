@@ -180,98 +180,79 @@ def apply_repetition_penalty(logits, generated_tokens, penalty=1.2):
 async def generate(
     prompt: str,
     prompt_without_context: str = "",
-    max_input: int = 500,
+    max_input: int = None,
     max_length: int = 200,
     min_length: int = 1,
     do_sample: bool = False,
     temperature: float = 1.0,
     top_k: int = 50,
-    top_p: float = 0.9,
+    top_p: float = 1.0,
     num_return_sequences: int = 1,
     repetition_penalty: float = None,
     length_penalty: float = None,
     eos_text: str = None,
     keep_prompt: bool = False,
-    alpha: float = 0.1,  # Context weight for CAD
+    alpha: float = 0.3,  # Context weight for CAD
 ):
     start_time = time.time()
-
     model_shortname = os.environ["MODEL_NAME"]
-    model, tokenizer = get_model_and_tokenizer()
 
-    # Prepare inputs
-    inputs_with_context = tokenizer.encode(prompt, return_tensors="pt", max_length=max_input).cuda()
+    model, tokenizer = get_model_and_tokenizer()
+    inputs = tokenizer.encode(prompt, return_tensors="pt", max_length=max_input).cuda()
     inputs_without_context = tokenizer.encode(prompt_without_context, return_tensors="pt", max_length=max_input).cuda()
 
-    # Check if the model is encoder-decoder (FLAN-T5) or causal (GPT-like)
-    is_encoder_decoder = model.config.is_encoder_decoder
+    stopping_criteria_list = StoppingCriteriaList()
+    if eos_text:
+        stopping_criteria = EOSReachedCriteria(tokenizer=tokenizer, eos_text=eos_text)
+        stopping_criteria_list = StoppingCriteriaList([stopping_criteria])
 
-    # Initialize variables for iterative decoding
-    cur_len = 0
+    is_encoder_decoder = model_shortname in ["T0pp", "ul2"] or model_shortname.startswith("flan-t5")
+
+    # Initialize generated sequences and logits storage
+    generated_ids = inputs
     generated_ids_without_context = inputs_without_context
-    generated_ids_with_context = inputs_with_context
-    past_key_values_with_context = None
-    past_key_values_without_context = None
-    generated_tokens = [[] for _ in range(generated_ids_with_context.size(0))]  # Track generated tokens for repetition penalty
 
-    with torch.no_grad():  # Corrected to use torch.no_grad() for inference mode
-        while cur_len < max_length:
-            # Generate logits for the current step without using context
-            outputs_without_context = model(
-                input_ids=generated_ids_without_context,
-                decoder_input_ids=generated_ids_without_context[:, -1:] if is_encoder_decoder else None,
-                past_key_values=past_key_values_without_context if not is_encoder_decoder else None,
-                use_cache=not is_encoder_decoder,
-                return_dict=True,
-            )
-            logits_without_context = outputs_without_context.logits[:, -1, :]
-            past_key_values_without_context = outputs_without_context.past_key_values
+    for _ in range(max_length):
+        # Generate logits for the next token with context
+        outputs_with_context = model(
+            input_ids=generated_ids, return_dict=True, output_logits=True
+        )
+        logits_with_context = outputs_with_context.logits[:, -1, :]  # Take the logits of the last token
 
-            # Generate logits with context
-            outputs_with_context = model(
-                input_ids=generated_ids_with_context,
-                decoder_input_ids=generated_ids_with_context[:, -1:] if is_encoder_decoder else None,
-                past_key_values=past_key_values_with_context if not is_encoder_decoder else None,
-                use_cache=not is_encoder_decoder,
-                return_dict=True,
-            )
-            logits_with_context = outputs_with_context.logits[:, -1, :]
-            past_key_values_with_context = outputs_with_context.past_key_values
+        # Generate logits for the next token without context
+        outputs_without_context = model(
+            input_ids=generated_ids_without_context, return_dict=True, output_logits=True
+        )
+        logits_without_context = outputs_without_context.logits[:, -1, :]  # Take the logits of the last token
 
-            # Apply CAD adjustments
-            combined_logit = (1 + alpha) * logits_with_context - alpha * logits_without_context
+        # Apply the CAD formula
+        combined_logits = ((1 + alpha) * logits_with_context) - (alpha * logits_without_context)
 
-            # Apply repetition penalty if enabled
-            if repetition_penalty:
-                combined_logit = apply_repetition_penalty(combined_logit, generated_tokens, repetition_penalty)
+        # Apply softmax to convert logits into probabilities
+        probs = F.softmax(combined_logits, dim=-1)
 
-            # Apply top-p sampling if enabled
-            if do_sample and top_p < 1.0:
-                combined_logit = apply_top_p_sampling(combined_logit, top_p)
+        # Sample or select the next token
+        if do_sample:
+            next_token = torch.multinomial(probs, num_samples=1)
+        else:
+            next_token = torch.argmax(probs, dim=-1, keepdim=True)
 
-            # Apply softmax and sampling
-            combined_logit = F.softmax(combined_logit / temperature, dim=-1)
-            next_token = torch.argmax(combined_logit, dim=-1)
+        # Append the generated token to the sequence
+        generated_ids = torch.cat([generated_ids, next_token], dim=1)
+        generated_ids_without_context = torch.cat([generated_ids_without_context, next_token], dim=1)
 
-            # Stop decoding if EOS token is generated
-            if next_token.item() == tokenizer.eos_token_id:
-                break
+        # Stop if end-of-sequence is reached
+        if eos_text and tokenizer.decode(next_token.item()).strip() == eos_text:
+            break
 
-            # Update inputs and context for the next iteration
-            generated_ids_without_context = torch.cat([generated_ids_without_context, next_token.unsqueeze(-1)], dim=-1)
-            generated_ids_with_context = torch.cat([generated_ids_with_context, next_token.unsqueeze(-1)], dim=-1)
-            cur_len += 1
+    # Decode the final sequences
+    generated_texts = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
 
-            # Track generated tokens for repetition penalty
-            for i, token in enumerate(next_token.tolist()):
-                generated_tokens[i].append(token)
-
-    # Decode generated tokens
-    generated_texts = tokenizer.batch_decode([tokens for tokens in generated_tokens], skip_special_tokens=True)
-
-    generated_num_tokens = [len(tokens) for tokens in generated_tokens]
+    generated_num_tokens = [len(generated_ids_) for generated_ids_ in generated_ids]
     if not keep_prompt and not is_encoder_decoder:
-        generated_texts = [generated_text[generated_text.index(prompt) + len(prompt):] for generated_text in generated_texts]
+        generated_texts = [
+            generated_text[generated_text.index(prompt) + len(prompt):] for generated_text in generated_texts
+        ]
     elif keep_prompt and is_encoder_decoder:
         generated_texts = [prompt + generated_text for generated_text in generated_texts]
 
