@@ -213,55 +213,56 @@ async def generate(
     past_key_values = None  # Only used for causal models
     generated_tokens = [set() for _ in range(generated_ids.size(0))]  # Track generated tokens for repetition penalty
 
-    while cur_len < max_length:
-        # Generate logits for the current step without using context
-        outputs = model(
-            input_ids=generated_ids,
-            decoder_input_ids=generated_ids[:, -1:] if is_encoder_decoder else None,  # For Seq2Seq models like FLAN-T5
-            past_key_values=past_key_values if not is_encoder_decoder else None,
-            use_cache=not is_encoder_decoder,  # Use cache only for causal models
-            return_dict=True,
-        )
-        logits_without_context = outputs.logits[:, -1, :]
+    with torch.inference_mode():  # Enable inference mode for better performance and memory efficiency
+        while cur_len < max_length:
+            # Generate logits for the current step without using context
+            outputs = model(
+                input_ids=generated_ids,
+                decoder_input_ids=generated_ids[:, -1:] if is_encoder_decoder else None,  # For Seq2Seq models like FLAN-T5
+                past_key_values=past_key_values if not is_encoder_decoder else None,
+                use_cache=not is_encoder_decoder,  # Use cache only for causal models
+                return_dict=True,
+            )
+            logits_without_context = outputs.logits[:, -1, :]
 
-        # Generate logits with context
-        outputs_with_context = model(
-            input_ids=generated_ids_with_context,
-            decoder_input_ids=generated_ids_with_context[:, -1:] if is_encoder_decoder else None,
-            past_key_values=outputs.past_key_values if not is_encoder_decoder else None,
-            use_cache=not is_encoder_decoder,
-            return_dict=True,
-        )
-        logits_with_context = outputs_with_context.logits[:, -1, :]
+            # Generate logits with context
+            outputs_with_context = model(
+                input_ids=generated_ids_with_context,
+                decoder_input_ids=generated_ids_with_context[:, -1:] if is_encoder_decoder else None,
+                past_key_values=outputs.past_key_values if not is_encoder_decoder else None,
+                use_cache=not is_encoder_decoder,
+                return_dict=True,
+            )
+            logits_with_context = outputs_with_context.logits[:, -1, :]
 
-        # Apply CAD adjustments
-        combined_logit = (1 + alpha) * logits_with_context - alpha * logits_without_context
+            # Apply CAD adjustments
+            combined_logit = (1 + alpha) * logits_with_context - alpha * logits_without_context
 
-        # Apply repetition penalty if enabled
-        if repetition_penalty:
-            combined_logit = apply_repetition_penalty(combined_logit, generated_tokens, repetition_penalty)
+            # Apply repetition penalty if enabled
+            if repetition_penalty:
+                combined_logit = apply_repetition_penalty(combined_logit, generated_tokens, repetition_penalty)
 
-        # Apply top-p sampling if enabled
-        if do_sample and top_p < 1.0:
-            combined_logit = apply_top_p_sampling(combined_logit, top_p)
+            # Apply top-p sampling if enabled
+            if do_sample and top_p < 1.0:
+                combined_logit = apply_top_p_sampling(combined_logit, top_p)
 
-        # Apply softmax and sampling
-        combined_logit = F.softmax(combined_logit / temperature, dim=-1)
-        next_token = torch.argmax(combined_logit, dim=-1)
+            # Apply softmax and sampling
+            combined_logit = F.softmax(combined_logit / temperature, dim=-1)
+            next_token = torch.argmax(combined_logit, dim=-1)
 
-        # Stop decoding if EOS token is generated
-        if next_token.item() == tokenizer.eos_token_id:
-            break
+            # Stop decoding if EOS token is generated
+            if next_token.item() == tokenizer.eos_token_id:
+                break
 
-        # Update inputs and context for next iteration
-        generated_ids = torch.cat([generated_ids, next_token.unsqueeze(-1)], dim=-1)
-        generated_ids_with_context = torch.cat([generated_ids_with_context, next_token.unsqueeze(-1)], dim=-1)
-        past_key_values = outputs_with_context.past_key_values if not is_encoder_decoder else None
-        cur_len += 1
+            # Update inputs and context for next iteration
+            generated_ids = torch.cat([generated_ids, next_token.unsqueeze(-1)], dim=-1)
+            generated_ids_with_context = torch.cat([generated_ids_with_context, next_token.unsqueeze(-1)], dim=-1)
+            past_key_values = outputs_with_context.past_key_values if not is_encoder_decoder else None
+            cur_len += 1
 
-        # Track generated tokens for repetition penalty
-        for i, token in enumerate(next_token.tolist()):
-            generated_tokens[i].add(token)
+            # Track generated tokens for repetition penalty
+            for i, token in enumerate(next_token.tolist()):
+                generated_tokens[i].add(token)
 
     # Decode generated tokens
     generated_texts = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
@@ -280,6 +281,7 @@ async def generate(
         "run_time_in_seconds": run_time_in_seconds,
         "model_name": model_shortname,
     }
+
 
 
 
