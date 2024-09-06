@@ -221,18 +221,18 @@ async def generate(
                 # Generate logits for the current step without using context
                 outputs = model(
                     input_ids=generated_ids,
-                    decoder_input_ids=generated_ids,
-                    past_key_values=past_key_values,
-                    use_cache=True,
+                    decoder_input_ids=generated_ids[:, -1:] if is_encoder_decoder else None,  # For Seq2Seq models like FLAN-T5
+                    past_key_values=past_key_values if not is_encoder_decoder else None,
+                    use_cache=not is_encoder_decoder,  # Use cache only for causal models
                     return_dict=True,
                 )
                 logits_without_context = F.log_softmax(outputs.logits[:, -1, :], dim=-1)
 
                 outputs_with_context = model(
                     input_ids=generated_ids_with_context,
-                    decoder_input_ids=generated_ids_with_context,
-                    past_key_values=outputs.past_key_values,
-                    use_cache=True,
+                    decoder_input_ids=generated_ids_with_context[:, -1:] if is_encoder_decoder else None,
+                    past_key_values=outputs.past_key_values if not is_encoder_decoder else None,
+                    use_cache=not is_encoder_decoder,
                     return_dict=True,
                 )
                 logits_with_context = F.log_softmax(outputs_with_context.logits[:, -1, :], dim=-1)
@@ -257,7 +257,7 @@ async def generate(
     # Decode generated tokens
     generated_texts = tokenizer.batch_decode(generated_ids_with_context, skip_special_tokens=True)
 
-    generated_num_tokens = [len(generated_ids_) for generated_ids_ in generated_ids]
+    generated_num_tokens = [len(generated_ids_) for generated_ids_ in generated_ids_with_context]
     if not keep_prompt and not is_encoder_decoder:
         generated_texts = [generated_text[generated_text.index(prompt) + len(prompt):] for generated_text in generated_texts]
     elif keep_prompt and is_encoder_decoder:
