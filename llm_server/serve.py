@@ -1,6 +1,7 @@
 import os
 import time
 from functools import lru_cache
+from torch.cuda.amp import autocast
 
 from fastapi import FastAPI
 
@@ -214,43 +215,44 @@ async def generate(
     generated_ids = inputs
     generated_ids_with_context = inputs_with_context
 
-    with torch.inference_mode():
-        while cur_len < max_new_tokens:
-            # Generate logits for the current step without using context
-            outputs = model(
-                input_ids=generated_ids,
-                decoder_input_ids=generated_ids,
-                past_key_values=past_key_values,
-                use_cache=True,
-                return_dict=True,
-            )
-            logits_without_context = F.log_softmax(outputs.logits[:, -1, :], dim=-1)
+    with torch.inference_mode(): # not store gradients
+        with autocast(): # mixed precision
+            while cur_len < max_new_tokens:
+                # Generate logits for the current step without using context
+                outputs = model(
+                    input_ids=generated_ids,
+                    decoder_input_ids=generated_ids,
+                    past_key_values=past_key_values,
+                    use_cache=True,
+                    return_dict=True,
+                )
+                logits_without_context = F.log_softmax(outputs.logits[:, -1, :], dim=-1)
 
-            outputs_with_context = model(
-                input_ids=generated_ids_with_context,
-                decoder_input_ids=generated_ids_with_context,
-                past_key_values=outputs.past_key_values,
-                use_cache=True,
-                return_dict=True,
-            )
-            logits_with_context = F.log_softmax(outputs_with_context.logits[:, -1, :], dim=-1)
+                outputs_with_context = model(
+                    input_ids=generated_ids_with_context,
+                    decoder_input_ids=generated_ids_with_context,
+                    past_key_values=outputs.past_key_values,
+                    use_cache=True,
+                    return_dict=True,
+                )
+                logits_with_context = F.log_softmax(outputs_with_context.logits[:, -1, :], dim=-1)
 
-            # Apply CAD adjustments
-            combined_logit = (1 + alpha) * logits_with_context - alpha * logits_without_context
+                # Apply CAD adjustments
+                combined_logit = (1 + alpha) * logits_with_context - alpha * logits_without_context
 
-            # Apply softmax and sampling
-            combined_logit = F.softmax(combined_logit / temperature, dim=-1)
-            next_token = torch.argmax(combined_logit, dim=-1)
+                # Apply softmax and sampling
+                combined_logit = F.softmax(combined_logit / temperature, dim=-1)
+                next_token = torch.argmax(combined_logit, dim=-1)
 
-            # Stop decoding if EOS token is generated
-            if next_token.item() == tokenizer.eos_token_id:
-                break
+                # Stop decoding if EOS token is generated
+                if next_token.item() == tokenizer.eos_token_id:
+                    break
 
-            # Update inputs and context for next iteration
-            generated_ids = torch.cat([generated_ids, next_token.unsqueeze(-1)], dim=-1)
-            generated_ids_with_context = torch.cat([generated_ids_with_context, next_token.unsqueeze(-1)], dim=-1)
-            past_key_values = outputs_with_context.past_key_values
-            cur_len += 1
+                # Update inputs and context for next iteration
+                generated_ids = torch.cat([generated_ids, next_token.unsqueeze(-1)], dim=-1)
+                generated_ids_with_context = torch.cat([generated_ids_with_context, next_token.unsqueeze(-1)], dim=-1)
+                past_key_values = outputs_with_context.past_key_values
+                cur_len += 1
 
     # Decode generated tokens
     generated_texts = tokenizer.batch_decode(generated_ids_with_context, skip_special_tokens=True)
