@@ -250,8 +250,8 @@ instantiation_schemes = {
     #     "distractor_count": ['"1"', '"2"', '"3"'],
     # },
     "ircot_qa": {
-        "bm25_retrieval_count": ["2", "4", "6", "8"],
-        "distractor_count": ['"1"', '"2"', '"3"'],
+        "bm25_retrieval_count": ["2"],
+        "distractor_count": ["1"],
     },
     "ircot": {
         "bm25_retrieval_count": ["6"],
