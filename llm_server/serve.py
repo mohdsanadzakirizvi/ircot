@@ -193,18 +193,26 @@ async def generate(
     length_penalty: float = None,
     eos_text: str = None,
     keep_prompt: bool = False,
-    alpha: float = 0.1,  # Context weight for CAD
+    alpha: float = 0,  # Context weight for CAD
 ):
     start_time = time.time()
 
     model_shortname = os.environ["MODEL_NAME"]
     model, tokenizer = get_model_and_tokenizer()
 
-    breakpoint
-    
+    # Ensure model is in eval mode
+    model.eval()
+
     # Prepare inputs
     inputs = tokenizer.encode(prompt_without_context, return_tensors="pt", max_length=max_input).cuda()
     inputs_with_context = tokenizer.encode(prompt, return_tensors="pt", max_length=max_input).cuda()
+
+    # Prepare attention mask for the input
+    attention_mask = torch.ones(inputs.shape, dtype=torch.long).cuda()
+    attention_mask_with_context = torch.ones(inputs_with_context.shape, dtype=torch.long).cuda()
+
+    # Start decoder input with the "start" token for the model (usually a padding or special token)
+    decoder_input_ids = torch.tensor([[model.config.decoder_start_token_id]]).cuda()
 
     is_encoder_decoder = model_shortname in ["T0pp", "ul2"] or model_shortname.startswith("flan-t5")
 
@@ -212,26 +220,28 @@ async def generate(
     cur_len = 0
     max_new_tokens = max_length
     # past_key_values = None
-    generated_ids = inputs
-    generated_ids_with_context = inputs_with_context
+    generated_ids = decoder_input_ids
+    generated_ids_with_context = decoder_input_ids
 
     with torch.inference_mode(): # not store gradients
         while cur_len < max_new_tokens:
             # Generate logits for the current step without using context
             outputs = model(
-                input_ids=generated_ids,
-                decoder_input_ids=generated_ids[:, -1:] if is_encoder_decoder else None,  # For Seq2Seq models like FLAN-T5
+                input_ids=inputs,
+                decoder_input_ids=generated_ids if is_encoder_decoder else None,  # For Seq2Seq models like FLAN-T5
+                attention_mask=attention_mask,
                 # past_key_values=past_key_values if not is_encoder_decoder else None,
-                # use_cache=not is_encoder_decoder,  # Use cache only for causal models
+                use_cache=False,  # Use cache only for causal models
                 return_dict=True,
             )
             logits_without_context = outputs.logits[:, -1, :]
 
             outputs_with_context = model(
-                input_ids=generated_ids_with_context,
-                decoder_input_ids=generated_ids_with_context[:, -1:] if is_encoder_decoder else None,
+                input_ids=inputs_with_context,
+                decoder_input_ids=generated_ids_with_context if is_encoder_decoder else None,
+                attention_mask=attention_mask_with_context,
                 # past_key_values=outputs.past_key_values if not is_encoder_decoder else None,
-                # use_cache=not is_encoder_decoder,
+                use_cache=False,
                 return_dict=True,
             )
             logits_with_context = outputs_with_context.logits[:, -1, :]
